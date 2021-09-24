@@ -21,7 +21,7 @@ public class MultiplatformConfigBuilder {
 
     public static final AtomicBoolean testMode = new AtomicBoolean(false);
     
-    private static void addPropertiesFile(CompositeConfiguration config, File configFile, boolean autoSave) throws ConfigurationException {
+    private static PropertiesConfiguration processPropertiesFile(File configFile, boolean autoSave) throws ConfigurationException {
         final var paramsFactory = new Parameters();
         final var configProperties = paramsFactory.properties();
         configProperties.setFile(configFile);
@@ -35,12 +35,12 @@ public class MultiplatformConfigBuilder {
             }
         }
         if (!configFile.exists()) {
-            return;
+            return null;
         }
         configBuilder.setAutoSave(autoSave);
-        config.addConfiguration(configBuilder.getConfiguration());
+        return configBuilder.getConfiguration();
     }
-    
+
     public static Configuration buildConfig(
             boolean portableByDefault,
             boolean autosaveByDefault,
@@ -49,24 +49,44 @@ public class MultiplatformConfigBuilder {
             String configFileName
     ) throws ConfigurationException {
         final var systemConfiguration = new SystemConfiguration();
-        final var config = new CompositeConfiguration();
+        CompositeConfiguration config;// = new CompositeConfiguration();
 
-        config.addConfiguration(systemConfiguration); //systemConfiguration always has high priority
-        
         final var portable = systemConfiguration.getBoolean("multiplatformconfig.portable", portableByDefault);
         final var autosave = systemConfiguration.getBoolean("multiplatformconfig.autosave", autosaveByDefault);
         if (portable || testMode.get()) {
             //read configuration from file in current working directory, enable autosave
-            addPropertiesFile(config, new File(configFileName + ".properties"), autosave);
+            final var portableConfig = processPropertiesFile(new File(configFileName + ".properties"), autosave);
+            if (autosave) {
+                config = new CompositeConfiguration(portableConfig);
+            } else {
+                config = new CompositeConfiguration();
+                if (portableConfig != null) {
+                    config.addConfiguration(portableConfig);
+                }
+            }
+            config.addConfigurationFirst(systemConfiguration);
         } else {
             final var appDirs = AppDirsFactory.getInstance();
             //read configuration from file in user home directory, enable autosave
             final var userConfigFile = new File(appDirs.getUserConfigDir(appName, appVersion, null) + File.separator + configFileName + ".properties");
-            addPropertiesFile(config, userConfigFile, autosave);
+            final var userConfig = processPropertiesFile(userConfigFile, autosave);
+            if (autosave) {
+                config = new CompositeConfiguration(userConfig);
+            } else {
+                config = new CompositeConfiguration();
+                if (userConfig != null) {
+                    config.addConfiguration(userConfig);
+                }
+            }
+            config.addConfigurationFirst(systemConfiguration);
+
             //read configuration from file in system distribution, do not save
             for (String directory: appDirs.getSiteConfigDir(appName, appVersion, null, true).split(":")) {
                 final var systemConfigFile = new File(directory + File.separator + configFileName + ".properties");
-                addPropertiesFile(config, systemConfigFile, false);
+                final var systemConfig = processPropertiesFile(systemConfigFile, false);
+                if (systemConfig != null) {
+                    config.addConfiguration(systemConfig);
+                }
             }
         }
         return config;
