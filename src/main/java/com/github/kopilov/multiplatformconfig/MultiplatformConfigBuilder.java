@@ -2,6 +2,8 @@ package com.github.kopilov.multiplatformconfig;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import net.harawata.appdirs.AppDirsFactory;
 import org.apache.commons.configuration2.CompositeConfiguration;
 import org.apache.commons.configuration2.Configuration;
@@ -16,6 +18,8 @@ import org.apache.commons.configuration2.ex.ConfigurationException;
  * @author Kopilov
  */
 public class MultiplatformConfigBuilder {
+
+    public static final AtomicBoolean testMode = new AtomicBoolean(false);
     
     private static void addPropertiesFile(CompositeConfiguration config, File configFile, boolean autoSave) throws ConfigurationException {
         final var paramsFactory = new Parameters();
@@ -24,7 +28,6 @@ public class MultiplatformConfigBuilder {
         final var configBuilder = new FileBasedConfigurationBuilder<>(PropertiesConfiguration.class).configure(configProperties);
         if (autoSave && !configFile.exists()) {
             try {
-                
                 configFile.getParentFile().mkdirs();
                 configFile.createNewFile();
             } catch (IOException ex) {
@@ -52,7 +55,7 @@ public class MultiplatformConfigBuilder {
         
         final var portable = systemConfiguration.getBoolean("multiplatformconfig.portable", portableByDefault);
         final var autosave = systemConfiguration.getBoolean("multiplatformconfig.autosave", autosaveByDefault);
-        if (portable) {
+        if (portable || testMode.get()) {
             //read configuration from file in current working directory, enable autosave
             addPropertiesFile(config, new File(configFileName + ".properties"), autosave);
         } else {
